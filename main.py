@@ -1,10 +1,9 @@
-
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -81,7 +80,7 @@ async def update_leaderboard():
         return
 
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
-    lb_text = "**🏆 Monthly Leaderboard**"
+    lb_text = "**🏆 Monthly Leaderboard**\n"
     for i, (user_id, count) in enumerate(sorted_leaderboard[:10], start=1):
         lb_text += f"{i}. <@{user_id}> – {count} logs\n"
 
@@ -99,11 +98,9 @@ async def check_monthly_reset():
         backup = leaderboard_data.get(last_month, {})
         if backup:
             sorted_backup = sorted(backup.items(), key=lambda x: x[1], reverse=True)
-            backup_text = f"📦 **{last_month} Leaderboard Backup**
-"
+            backup_text = f"📦 **{last_month} Leaderboard Backup**\n"
             for i, (user_id, count) in enumerate(sorted_backup, start=1):
-                backup_text += f"{i}. <@{user_id}> — {count} logs
-"
+                backup_text += f"{i}. <@{user_id}> — {count} logs\n"
 
             backup_channel = bot.get_channel(BACKUP_CHANNEL_ID)
             if backup_channel:
