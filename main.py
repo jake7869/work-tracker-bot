@@ -34,7 +34,8 @@ PRICE_CONFIG = {
     "bike": 50000,
     "engine": 500000,
     "car_full": 850000,
-    "bike_full": 300000
+    "bike_full": 300000,
+    "repair": 25000
 }
 
 class WorkPanel(discord.ui.View):
@@ -98,6 +99,10 @@ class WorkPanel(discord.ui.View):
     @discord.ui.button(label="Full Bike Upgrade", style=discord.ButtonStyle.secondary, custom_id="bike_full")
     async def bike_full_upgrade(self, interaction, button):
         await self.handle_action(interaction, "bike_full")
+        
+    @discord.ui.button(label="Repair", style=discord.ButtonStyle.primary, custom_id="repair")
+    async def repair_action(self, interaction: discord.Interaction, button: discord.ui.Button):
+    await self.handle_action(interaction, "repair")
 
     @discord.ui.button(label="🔄 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
     async def refresh_leaderboard(self, interaction, button):
