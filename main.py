@@ -2,6 +2,7 @@
 import discord
 from discord.ext import commands, tasks
 import os
+print("DEBUG:", os.getenv("PANEL_CHANNEL_ID"))
 from datetime import datetime, timedelta
 from collections import defaultdict
 import json
