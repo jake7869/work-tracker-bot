@@ -20,6 +20,7 @@ work_data = defaultdict(lambda: {
     "engine": 0,
     "car_full": 0,
     "bike_full": 0,
+    "repair": 0,
     "earnings": 0,
     "total_time": 0
 })
