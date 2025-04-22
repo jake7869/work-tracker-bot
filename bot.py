@@ -1,53 +1,51 @@
 
+import os
 import discord
 from discord.ext import commands
-from discord import app_commands  # <-- New import
-import os
+from discord import option
+from dotenv import load_dotenv
+
+load_dotenv()
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SHIFT_LOG_CHANNEL_ID = int(os.getenv("SHIFT_LOG_CHANNEL_ID", 0))
 SERVICE_LOG_CHANNEL_ID = int(os.getenv("SERVICE_LOG_CHANNEL_ID", 0))
 
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix='!', intents=intents)
-tree = app_commands.CommandTree(bot)  # <-- New line
+bot = discord.Bot(intents=discord.Intents.default())
 
 @bot.event
 async def on_ready():
-    await tree.sync()  # <-- New line to register slash commands
     print(f"✅ Logged in as {bot.user}")
+    print("🔁 Syncing commands...")
+    await bot.sync_commands()
+    print("✅ Synced slash commands!")
 
-# Command: Clock In
-@bot.command()
+# Slash command: Clock In
+@bot.slash_command(name="clockin", description="Clock in for your shift.")
 async def clockin(ctx):
-    if SHIFT_LOG_CHANNEL_ID:
-        channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
-        await channel.send(f"✅ Clock In = {ctx.author.mention}")
-        await ctx.send("You are now clocked in 🕒")
+    channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+    await channel.send(f"✅ Clock In = {ctx.author.mention}")
+    await ctx.respond("You are now clocked in! 🟢", ephemeral=True)
 
-# Command: Clock Out
-@bot.command()
+# Slash command: Clock Out
+@bot.slash_command(name="clockout", description="Clock out from your shift.")
 async def clockout(ctx):
-    if SHIFT_LOG_CHANNEL_ID:
-        channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
-        await channel.send(f"❌ Clock Out = {ctx.author.mention}")
-        await ctx.send("You are now clocked out 🕒")
+    channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+    await channel.send(f"❌ Clock Out = {ctx.author.mention}")
+    await ctx.respond("You are now clocked out! 🔴", ephemeral=True)
 
-# Command: Log service
-@bot.command()
+# Slash command: Log service activity
+@bot.slash_command(name="service", description="Log a completed service task.")
+@option("type", description="The type of service (e.g., Car Upgrade, Bike Parts)")
+@option("amount", description="Number of services completed", min_value=1)
 async def service(ctx, type: str, amount: int):
-    if SERVICE_LOG_CHANNEL_ID:
-        channel = bot.get_channel(SERVICE_LOG_CHANNEL_ID)
-        await channel.send(f"🔧 {ctx.author.mention} completed **{amount}** `{type}`")
-        await ctx.send(f"Service recorded: {amount} {type}.")
+    channel = bot.get_channel(SERVICE_LOG_CHANNEL_ID)
+    await channel.send(f"🔧 {ctx.author.mention} completed **{amount}** `{type}`")
+    await ctx.respond(f"✅ Recorded: {amount} {type}", ephemeral=True)
 
-# SLASH COMMAND: Panel
-@tree.command(name="panel", description="Display the work tracker panel")
-async def panel(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "🛠️ **Work Tracker Panel**\nUse `/clockin`, `/clockout`, or `/service` to log your activity."
-    )
+# Slash command: Panel
+@bot.slash_command(name="panel", description="Show the tracker panel.")
+async def panel(ctx):
+    await ctx.respond("🛠️ **Work Tracker Panel**\nUse `/clockin`, `/clockout`, or `/service` to log work.")
 
 bot.run(TOKEN)
