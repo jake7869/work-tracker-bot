@@ -1,51 +1,65 @@
-
-import os
 import discord
 from discord.ext import commands
-from discord import option
-from dotenv import load_dotenv
-
-load_dotenv()
+import os
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SHIFT_LOG_CHANNEL_ID = int(os.getenv("SHIFT_LOG_CHANNEL_ID", 0))
 SERVICE_LOG_CHANNEL_ID = int(os.getenv("SERVICE_LOG_CHANNEL_ID", 0))
 
-bot = discord.Bot(intents=discord.Intents.default())
+intents = discord.Intents.default()
+intents.message_content = True
 
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# === Basic Events ===
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
-    print("🔁 Syncing commands...")
-    await bot.sync_commands()
-    print("✅ Synced slash commands!")
 
-# Slash command: Clock In
-@bot.slash_command(name="clockin", description="Clock in for your shift.")
+# === Basic Commands ===
+@bot.command()
 async def clockin(ctx):
-    channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
-    await channel.send(f"✅ Clock In = {ctx.author.mention}")
-    await ctx.respond("You are now clocked in! 🟢", ephemeral=True)
+    if SHIFT_LOG_CHANNEL_ID:
+        channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+        await channel.send(f"✅ Clock In = {ctx.author.mention}")
+        await ctx.send("You are now clocked in 🕒")
 
-# Slash command: Clock Out
-@bot.slash_command(name="clockout", description="Clock out from your shift.")
+@bot.command()
 async def clockout(ctx):
-    channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
-    await channel.send(f"❌ Clock Out = {ctx.author.mention}")
-    await ctx.respond("You are now clocked out! 🔴", ephemeral=True)
+    if SHIFT_LOG_CHANNEL_ID:
+        channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+        await channel.send(f"❌ Clock Out = {ctx.author.mention}")
+        await ctx.send("You are now clocked out 🕔")
 
-# Slash command: Log service activity
-@bot.slash_command(name="service", description="Log a completed service task.")
-@option("type", description="The type of service (e.g., Car Upgrade, Bike Parts)")
-@option("amount", description="Number of services completed", min_value=1)
+@bot.command()
 async def service(ctx, type: str, amount: int):
-    channel = bot.get_channel(SERVICE_LOG_CHANNEL_ID)
-    await channel.send(f"🔧 {ctx.author.mention} completed **{amount}** `{type}`")
-    await ctx.respond(f"✅ Recorded: {amount} {type}", ephemeral=True)
+    if SERVICE_LOG_CHANNEL_ID:
+        channel = bot.get_channel(SERVICE_LOG_CHANNEL_ID)
+        await channel.send(f"🔧 {ctx.author.mention} completed **{amount}** `{type}`")
+        await ctx.send(f"Service recorded: {amount} {type}")
 
-# Slash command: Panel
-@bot.slash_command(name="panel", description="Show the tracker panel.")
+# === Persistent Panel with Buttons ===
+class PanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Clock In", style=discord.ButtonStyle.success, custom_id="clockin_button")
+    async def clockin_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if SHIFT_LOG_CHANNEL_ID:
+            channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+            await channel.send(f"✅ Clock In = {interaction.user.mention}")
+        await interaction.response.send_message("Clocked in!", ephemeral=True)
+
+    @discord.ui.button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clockout_button")
+    async def clockout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if SHIFT_LOG_CHANNEL_ID:
+            channel = bot.get_channel(SHIFT_LOG_CHANNEL_ID)
+            await channel.send(f"❌ Clock Out = {interaction.user.mention}")
+        await interaction.response.send_message("Clocked out!", ephemeral=True)
+
+@bot.command()
 async def panel(ctx):
-    await ctx.respond("🛠️ **Work Tracker Panel**\nUse `/clockin`, `/clockout`, or `/service` to log work.")
+    view = PanelView()
+    await ctx.send("**Shift Panel:**", view=view)
 
 bot.run(TOKEN)
