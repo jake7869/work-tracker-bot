@@ -147,6 +147,7 @@ async def update_leaderboard():
             value=(
                 f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
                 f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🛵 Bike Full: {data['bike_full']}\n"
+                 f"🔧 Repair: {data['repair']}\n"
                 f"📑 Earnings: £{data['earnings']:,}\n"
                 f"⏱️ Time Clocked: {time_str}"
             ),
