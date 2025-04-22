@@ -109,8 +109,8 @@ async def reset_leaderboard(self, interaction: discord.Interaction, button: disc
 
     await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetConfirmView(), ephemeral=True)
 
-        await update_leaderboard()
-        await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
+    await update_leaderboard()
+    await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
 
 async def log_action(message: str):
     channel = bot.get_channel(LOG_CHANNEL_ID)
