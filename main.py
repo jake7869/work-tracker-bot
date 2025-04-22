@@ -139,7 +139,7 @@ async def update_leaderboard():
         embed.add_field(
             name=f"{name}",
             value=(
-                f"💰 Earnings: £{data['earnings']:,}
+                f"💰 Earnings: £{data['earnings']:,}"
 "
                 f"🕒 Time: {total_time}
 "
