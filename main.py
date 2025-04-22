@@ -136,18 +136,17 @@ async def update_leaderboard():
     for user_id, data in leaderboard:
         time_str = str(timedelta(seconds=data["total_time"]))
         embed.add_field(
-            name=f"<@{user_id}>",
-            value=(
-                f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}"
+embed.add_field(
+    name=f"<@{user_id}>",
+    value=(
+        f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}\n"
+        f"🛠️ Engine: {data['engine']} | 🚗 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
+        f"💰 Earnings: £{data['earnings']:,}\n"
+        f"⏱️ Time Clocked: {time_str}"
+    ),
+    inline=False
+)
 
-                f"🔧 Engine: {data['engine']} | 🚘 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}
-"
-                f"💰 Earnings: £{data['earnings']:,}
-"
-                f"⏱️ Time Clocked: {time_str}"
-            ),
-            inline=False
-        )
 
     history = [msg async for msg in channel.history(limit=5)]
     for msg in history:
