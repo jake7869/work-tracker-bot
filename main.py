@@ -110,9 +110,10 @@ async def update_leaderboard():
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
     embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
     for user_id, data in leaderboard:
+    user = await bot.fetch_user(int(user_id))
         time_str = str(timedelta(seconds=int(data["total_time"])))
         embed.add_field(
-            name=f"<@{user_id}>",
+           name=user.name,
             value=(
                 f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}\n"
                 f"🛠️ Engine: {data['engine']} | 🚘 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
