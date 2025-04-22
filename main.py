@@ -6,11 +6,16 @@ import json
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+# Get environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-PANEL_CHANNEL_ID = int(os.getenv("PANEL_CHANNEL_ID"))
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
-LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID"))
-BACKUP_CHANNEL_ID = int(os.getenv("BACKUP_CHANNEL_ID"))
+PANEL_CHANNEL_ID = int(os.getenv("PANEL_CHANNEL_ID", 0))
+LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0))
+LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID", 0))
+BACKUP_CHANNEL_ID = int(os.getenv("BACKUP_CHANNEL_ID", 0))
+
+# Validate essential environment variables
+if not TOKEN or not all([PANEL_CHANNEL_ID, LOG_CHANNEL_ID, LEADERBOARD_CHANNEL_ID, BACKUP_CHANNEL_ID]):
+    raise ValueError("One or more environment variables are not set correctly.")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -49,6 +54,7 @@ async def on_ready():
     print(f"Bot connected as {bot.user}")
     panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
     if panel_channel:
+        await panel_channel.purge(limit=10)
         await panel_channel.send("**🛠️ Shift Logging & Service Panel**", view=PanelView())
     update_leaderboard.start()
     check_monthly_reset.start()
