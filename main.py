@@ -101,6 +101,13 @@ class WorkPanel(discord.ui.View):
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message("🚫 Only admins can refresh the leaderboard.", ephemeral=True)
             return
+@discord.ui.button(label="Reset Leaderboard", style=discord.ButtonStyle.danger, custom_id="reset_leaderboard")
+async def reset_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
+        return
+
+    await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetConfirmView(), ephemeral=True)
 
         await update_leaderboard()
         await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
@@ -148,5 +155,23 @@ async def on_ready():
             if msg.author == bot.user:
                 await msg.delete()
         await panel_channel.send("**Work Panel**", view=WorkPanel())
+class ResetConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=30)
+
+    @discord.ui.button(label="Confirm Reset", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You don't have permission to do this.", ephemeral=True)
+            return
+
+        work_data.clear()
+        await interaction.response.send_message("✅ Leaderboard has been reset!", ephemeral=False)
+        await update_leaderboard()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("❌ Reset cancelled.", ephemeral=True)
+        self.stop()
 
 bot.run(DISCORD_BOT_TOKEN)
