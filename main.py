@@ -83,8 +83,7 @@ async def update_leaderboard():
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
     lb_text = "**🏆 Monthly Leaderboard**"
     for i, (user_id, count) in enumerate(sorted_leaderboard[:10], start=1):
-        lb_text += f"{i}. <@{user_id}> — {count} logs
-"
+        lb_text += f"{i}. <@{user_id}> – {count} logs\n"
 
     lb_channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
     if lb_channel:
