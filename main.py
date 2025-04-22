@@ -102,7 +102,8 @@ class WorkPanel(discord.ui.View):
         
     @discord.ui.button(label="Repair", style=discord.ButtonStyle.primary, custom_id="repair")
     async def repair_action(self, interaction: discord.Interaction, button: discord.ui.Button):
-    await self.handle_action(interaction, "repair")
+        await self.handle_action(interaction, "repair")
+
 
     @discord.ui.button(label="🔄 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
     async def refresh_leaderboard(self, interaction, button):
