@@ -96,6 +96,14 @@ class WorkPanel(discord.ui.View):
     @discord.ui.button(label="Full Bike Upgrade", style=discord.ButtonStyle.secondary, custom_id="bike_full")
     async def bike_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "bike_full")
+    @discord.ui.button(label="🔄 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
+    async def refresh_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("🚫 Only admins can refresh the leaderboard.", ephemeral=True)
+            return
+
+        await update_leaderboard()
+        await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
 
 async def log_action(message: str):
     channel = bot.get_channel(LOG_CHANNEL_ID)
