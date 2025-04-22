@@ -96,6 +96,14 @@ class WorkPanel(discord.ui.View):
     @discord.ui.button(label="Full Bike Upgrade", style=discord.ButtonStyle.secondary, custom_id="bike_full")
     async def bike_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "bike_full")
+    @discord.ui.button(label="Reset Leaderboard", style=discord.ButtonStyle.danger, custom_id="reset_leaderboard")
+    async def reset_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
+        return
+
+    await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetConfirmView(), ephemeral=True)
+
     @discord.ui.button(label="🔄 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
     async def refresh_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
