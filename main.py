@@ -138,8 +138,8 @@ async def update_leaderboard():
         embed.add_field(
             name=f"<@{user_id}>",
             value=(
-                f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}
-"
+                f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}"
+
                 f"🔧 Engine: {data['engine']} | 🚘 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}
 "
                 f"💰 Earnings: £{data['earnings']:,}
