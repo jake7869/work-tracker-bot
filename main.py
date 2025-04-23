@@ -110,11 +110,11 @@ async def update_leaderboard():
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
     embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
 for user_id, data in leaderboard:
-try:
-    user = await bot.fetch_user(int(user_id))
-    user_name = user.name
-except:
-    user_name = f"<@{user_id}>"
+    try:
+        user = await bot.fetch_user(int(user_id))
+        user_name = user.name
+    except:
+         user_name = f"<@{user_id}>"
 
     time_str = str(timedelta(seconds=int(data["total_time"])))
     embed.add_field(
