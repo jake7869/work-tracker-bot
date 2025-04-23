@@ -1,6 +1,6 @@
 
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -115,9 +115,24 @@ class WorkPanel(discord.ui.View):
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
             return
+        await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetConfirmView(), ephemeral=True)
+
+class ResetConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=30)
+
+    @discord.ui.button(label="✅ Confirm Reset", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You don't have permission.", ephemeral=True)
+            return
         work_data.clear()
         await update_leaderboard()
-        await interaction.response.send_message("⚠️ Leaderboard has been reset.", ephemeral=True)
+        await interaction.response.edit_message(content="✅ Leaderboard reset successfully.", view=None)
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Reset cancelled.", view=None)
 
 async def log_action(message: str):
     channel = bot.get_channel(LOG_CHANNEL_ID)
@@ -144,30 +159,4 @@ async def update_leaderboard():
             name=user_name,
             value=(
                 f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
-                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
-                f"🛠️ Repair: {data['repair']}\n"
-                f"💳 Earnings: £{data['earnings']:,}\n"
-                f"⏱️ Time Clocked: {time_str}"
-            ),
-            inline=False
-        )
-
-    history = [msg async for msg in channel.history(limit=5)]
-    for msg in history:
-        if msg.author == bot.user:
-            await msg.delete()
-
-    await channel.send(embed=embed)
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    bot.add_view(WorkPanel())
-    panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
-    if panel_channel:
-        async for msg in panel_channel.history(limit=5):
-            if msg.author == bot.user:
-                await msg.delete()
-        await panel_channel.send("**Work Panel**", view=WorkPanel())
-
-bot.run(DISCORD_BOT_TOKEN)
+                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data
