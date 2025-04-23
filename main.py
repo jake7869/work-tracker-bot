@@ -159,4 +159,30 @@ async def update_leaderboard():
             name=user_name,
             value=(
                 f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
-                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data
+                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
+                f"🔧 Repair: {data['repair']}\n"
+                f"💳 Earnings: £{data['earnings']:,}\n"
+                f"⏱️ Time Clocked: {time_str}"
+            ),
+            inline=False
+        )
+
+    history = [msg async for msg in channel.history(limit=5)]
+    for msg in history:
+        if msg.author == bot.user:
+            await msg.delete()
+
+    await channel.send(embed=embed)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    bot.add_view(WorkPanel())
+    panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
+    if panel_channel:
+        async for msg in panel_channel.history(limit=5):
+            if msg.author == bot.user:
+                await msg.delete()
+        await panel_channel.send("**Work Panel**", view=WorkPanel())
+
+bot.run(DISCORD_BOT_TOKEN)
