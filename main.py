@@ -109,31 +109,32 @@ async def update_leaderboard():
 
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
     embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
-for user_id, data in leaderboard:
-    try:
-        user = await bot.fetch_user(int(user_id))
-        user_name = user.name
-    except:
-         user_name = f"<@{user_id}>"
 
-    time_str = str(timedelta(seconds=int(data["total_time"])))
-    embed.add_field(
-        name=user_name,
-        value=(
-            f"🚗 Car: {data['car']} | 🏍️ Bike: {data['bike']}\n"
-            f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🛵 Bike Full: {data['bike_full']}\n"
-            f"🧾 Earnings: £{data['earnings']:,}\n"
-            f"⏱️ Time Clocked: {time_str}"
-        ),
-        inline=False
-    )
+    for user_id, data in leaderboard:
+        try:
+            user = await bot.fetch_user(int(user_id))
+            user_name = user.name
+        except:
+            user_name = f"<@{user_id}>"
 
+        time_str = str(timedelta(seconds=int(data["total_time"])))
+        embed.add_field(
+            name=user_name,
+            value=(
+                f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
+                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
+                f"💳 Earnings: £{data['earnings']:,}\n"
+                f"⏱️ Time Clocked: {time_str}"
+            ),
+            inline=False
+        )
 
-
+    # Remove previous leaderboard message(s) from bot
     history = [msg async for msg in channel.history(limit=5)]
     for msg in history:
         if msg.author == bot.user:
             await msg.delete()
+
     await channel.send(embed=embed)
 
 @bot.event
