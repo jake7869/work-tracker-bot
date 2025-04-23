@@ -4,7 +4,6 @@ from discord.ext import commands, tasks
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
-import json
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -20,6 +19,7 @@ work_data = defaultdict(lambda: {
     "engine": 0,
     "car_full": 0,
     "bike_full": 0,
+    "repair": 0,
     "earnings": 0,
     "total_time": 0
 })
@@ -34,7 +34,8 @@ PRICE_CONFIG = {
     "bike": 50000,
     "engine": 500000,
     "car_full": 850000,
-    "bike_full": 300000
+    "bike_full": 300000,
+    "repair": 25000
 }
 
 class WorkPanel(discord.ui.View):
@@ -97,6 +98,27 @@ class WorkPanel(discord.ui.View):
     async def bike_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "bike_full")
 
+    @discord.ui.button(label="Repair", style=discord.ButtonStyle.primary, custom_id="repair")
+    async def repair_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_action(interaction, "repair")
+
+    @discord.ui.button(label="🔁 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
+    async def refresh_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Only admins can refresh the leaderboard.", ephemeral=True)
+            return
+        await update_leaderboard()
+        await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
+
+    @discord.ui.button(label="⚠️ Reset Leaderboard", style=discord.ButtonStyle.danger, custom_id="reset_leaderboard")
+    async def reset_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
+            return
+        work_data.clear()
+        await update_leaderboard()
+        await interaction.response.send_message("⚠️ Leaderboard has been reset.", ephemeral=True)
+
 async def log_action(message: str):
     channel = bot.get_channel(LOG_CHANNEL_ID)
     if channel:
@@ -123,13 +145,13 @@ async def update_leaderboard():
             value=(
                 f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
                 f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
+                f"🛠️ Repair: {data['repair']}\n"
                 f"💳 Earnings: £{data['earnings']:,}\n"
                 f"⏱️ Time Clocked: {time_str}"
             ),
             inline=False
         )
 
-    # Remove previous leaderboard message(s) from bot
     history = [msg async for msg in channel.history(limit=5)]
     for msg in history:
         if msg.author == bot.user:
