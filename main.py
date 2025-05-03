@@ -1,188 +1,236 @@
 
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
+import asyncio
 import os
-from datetime import datetime, timedelta
-from collections import defaultdict
+import json
+
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+CHANNEL_ID = 1359223780857217246
+LEADERBOARD_CHANNEL_ID = 1359223780857217246
+ADMIN_ROLE_ID = 1300916696860856448
+MOD_ROLE_ID = 1368248321986269235
+WIN_AMOUNT = 250_000
+
+DATA_FILE = "redzone_data.json"
+LOG_FILE = "redzone_log.json"
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-work_data = defaultdict(lambda: {
-    "clocked_in": False,
-    "last_clock_in": None,
-    "car": 0,
-    "bike": 0,
-    "engine": 0,
-    "car_full": 0,
-    "bike_full": 0,
-    "repair": 0,
-    "earnings": 0,
-    "total_time": 0
-})
+def load_json(filename, default):
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            return json.load(f)
+    return default
 
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-PANEL_CHANNEL_ID = int(os.getenv("PANEL_CHANNEL_ID"))
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
-LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID"))
+def save_json(filename, data):
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=4)
 
-PRICE_CONFIG = {
-    "car": 50000,
-    "bike": 50000,
-    "engine": 500000,
-    "car_full": 850000,
-    "bike_full": 300000,
-    "repair": 25000
-}
+redzone_data = load_json(DATA_FILE, {})
+joined_users = set(redzone_data.keys())
+redzone_logs = load_json(LOG_FILE, [])
+leaderboard_message = None
+active_redzones = {}
 
-class WorkPanel(discord.ui.View):
+class PermanentRedzoneView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Clock In", style=discord.ButtonStyle.success, custom_id="clock_in")
-    async def clock_in(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user_id = str(interaction.user.id)
-        if work_data[user_id]["clocked_in"]:
-            await interaction.response.send_message("You are already clocked in.", ephemeral=True)
-        else:
-            work_data[user_id]["clocked_in"] = True
-            work_data[user_id]["last_clock_in"] = datetime.utcnow()
-            await interaction.response.send_message("You clocked in!", ephemeral=True)
-            await log_action(f"{interaction.user.mention} Clocked In at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+    @discord.ui.button(label="Start Redzone", style=discord.ButtonStyle.primary, custom_id="start_redzone_button")
+    async def start_redzone(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_message("📍 Please enter the postal code for this Redzone (reply below):", ephemeral=True)
 
-    @discord.ui.button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clock_out")
-    async def clock_out(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user_id = str(interaction.user.id)
-        if not work_data[user_id]["clocked_in"]:
-            await interaction.response.send_message("You are not clocked in.", ephemeral=True)
-        else:
-            start = work_data[user_id]["last_clock_in"]
-            duration = (datetime.utcnow() - start).total_seconds()
-            work_data[user_id]["total_time"] += duration
-            work_data[user_id]["clocked_in"] = False
-            work_data[user_id]["last_clock_in"] = None
-            await interaction.response.send_message("You clocked out!", ephemeral=True)
-            await log_action(f"{interaction.user.mention} Clocked Out at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+        def check(m):
+            return m.author.id == interaction.user.id and m.channel.id == interaction.channel.id
 
-    async def handle_action(self, interaction, action):
-        user_id = str(interaction.user.id)
-        if not work_data[user_id]["clocked_in"]:
-            await interaction.response.send_message("You must clock in before performing this action.", ephemeral=True)
-            return
-        work_data[user_id][action] += 1
-        work_data[user_id]["earnings"] += PRICE_CONFIG[action]
-        await interaction.response.send_message(f"{action.replace('_', ' ').title()} recorded!", ephemeral=True)
-        await log_action(f"{interaction.user.mention} performed {action.replace('_', ' ').title()} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
-        await update_leaderboard()
-
-    @discord.ui.button(label="Car Part", style=discord.ButtonStyle.primary, custom_id="car")
-    async def upgrade_car(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "car")
-
-    @discord.ui.button(label="Bike Part", style=discord.ButtonStyle.primary, custom_id="bike")
-    async def upgrade_bike(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "bike")
-
-    @discord.ui.button(label="Engine Upgrade", style=discord.ButtonStyle.primary, custom_id="engine")
-    async def engine_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "engine")
-
-    @discord.ui.button(label="Full Car Upgrade", style=discord.ButtonStyle.secondary, custom_id="car_full")
-    async def car_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "car_full")
-
-    @discord.ui.button(label="Full Bike Upgrade", style=discord.ButtonStyle.secondary, custom_id="bike_full")
-    async def bike_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "bike_full")
-
-    @discord.ui.button(label="Repair", style=discord.ButtonStyle.primary, custom_id="repair")
-    async def repair_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "repair")
-
-    @discord.ui.button(label="🔁 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
-    async def refresh_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ Only admins can refresh the leaderboard.", ephemeral=True)
-            return
-        await update_leaderboard()
-        await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
-
-    @discord.ui.button(label="⚠️ Reset Leaderboard", style=discord.ButtonStyle.danger, custom_id="reset_leaderboard")
-    async def reset_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
-            return
-        await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetConfirmView(), ephemeral=True)
-
-class ResetConfirmView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=30)
-
-    @discord.ui.button(label="✅ Confirm Reset", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ You don't have permission.", ephemeral=True)
-            return
-        work_data.clear()
-        await update_leaderboard()
-        await interaction.response.edit_message(content="✅ Leaderboard reset successfully.", view=None)
-
-    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="❌ Reset cancelled.", view=None)
-
-async def log_action(message: str):
-    channel = bot.get_channel(LOG_CHANNEL_ID)
-    if channel:
-        await channel.send(message)
-
-async def update_leaderboard():
-    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
-    if not channel:
-        return
-
-    leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
-    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
-
-    for user_id, data in leaderboard:
         try:
-            user = await bot.fetch_user(int(user_id))
-            user_name = user.name
-        except:
-            user_name = f"<@{user_id}>"
+            msg = await bot.wait_for("message", timeout=30.0, check=check)
+            postal_code = msg.content.strip()
 
-        time_str = str(timedelta(seconds=int(data["total_time"])))
-        embed.add_field(
-            name=user_name,
-            value=(
-                f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
-                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
-                f"🔧 Repair: {data['repair']}\n"
-                f"💳 Earnings: £{data['earnings']:,}\n"
-                f"⏱️ Time Clocked: {time_str}"
-            ),
-            inline=False
+            view = RedzoneView(postal_code=postal_code, starter_id=interaction.user.id)
+            embed = discord.Embed(
+                title=f"🚨 Redzone at Postal: {postal_code}",
+                description="You have 4 minutes 30 seconds.\n\n👥 Joined: _None yet_",
+                color=discord.Color.red()
+            )
+            redzone_channel = interaction.guild.get_channel(CHANNEL_ID)
+            posted_msg = await redzone_channel.send(embed=embed, view=view)
+            view.set_message(posted_msg)
+            active_redzones[postal_code] = [posted_msg]
+            await view.start_outcome_prompt(interaction.guild, redzone_channel)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("❌ Redzone creation cancelled (no postal provided).", ephemeral=True)
+
+class RedzoneView(View):
+    def __init__(self, postal_code, starter_id):
+        super().__init__(timeout=None)
+        self.postal_code = postal_code
+        self.starter_id = starter_id
+        self.joined_users = set()
+        self.message = None
+        self.closed = False
+
+    def set_message(self, message):
+        self.message = message
+
+    async def update_joined_embed(self, guild):
+        names = [f"<@{uid}>" for uid in self.joined_users]
+        name_list = ", ".join(names) if names else "_None yet_"
+        embed = discord.Embed(
+            title=f"🚨 Redzone at Postal: {self.postal_code}",
+            description=f"You have 4 minutes 30 seconds.\n\n👥 Joined: {name_list}",
+            color=discord.Color.red()
         )
+        await self.message.edit(embed=embed, view=self)
 
-    history = [msg async for msg in channel.history(limit=5)]
-    for msg in history:
-        if msg.author == bot.user:
+    @discord.ui.button(label="Join Redzone", style=discord.ButtonStyle.success, custom_id="join_redzone_button")
+    async def join(self, interaction: discord.Interaction, button: Button):
+        if self.closed:
+            await interaction.response.send_message("❌ This redzone is closed.", ephemeral=True)
+            return
+
+        self.joined_users.add(interaction.user.id)
+
+        uid_str = str(interaction.user.id)
+        joined_users.add(uid_str)
+
+        if uid_str not in redzone_data:
+            redzone_data[uid_str] = {"joined": 0, "wins": 0, "earned": 0}
+
+        redzone_data[uid_str]["joined"] += 1
+        save_json(DATA_FILE, redzone_data)
+
+        await interaction.response.defer(ephemeral=True)
+        await self.update_joined_embed(interaction.guild)
+        await update_leaderboard(interaction.guild)
+        await interaction.followup.send(f"✅ You've joined Redzone at Postal: {self.postal_code}!", ephemeral=True)
+
+    async def start_outcome_prompt(self, guild, channel):
+        await asyncio.sleep(270)  # 4 minutes 30 seconds
+        participants = list(self.joined_users)
+
+        class OutcomeView(View):
+            def __init__(self, postal_code, participants, starter_id):
+                super().__init__(timeout=None)
+                self.postal_code = postal_code
+                self.participants = participants
+                self.starter_id = starter_id
+
+            @discord.ui.button(label="Win", style=discord.ButtonStyle.success)
+            async def win(self, interaction: discord.Interaction, button: Button):
+                await self.handle_result(interaction, "win")
+
+            @discord.ui.button(label="Lose", style=discord.ButtonStyle.danger)
+            async def lose(self, interaction: discord.Interaction, button: Button):
+                await self.handle_result(interaction, "loss")
+
+            async def handle_result(self, interaction, result):
+                allowed = (
+                    interaction.user.id == self.starter_id or
+                    any(role.id == MOD_ROLE_ID for role in interaction.user.roles)
+                )
+                if not allowed:
+                    await interaction.response.send_message("❌ You don’t have permission to mark this Redzone.", ephemeral=True)
+                    return
+                await interaction.response.defer()
+                await handle_redzone_end(self.postal_code, result, self.participants, interaction.guild, interaction.channel, interaction)
+
+        view = OutcomeView(self.postal_code, participants, self.starter_id)
+        msg = await channel.send(f"⏳ Redzone at Postal {self.postal_code} is over. Was it a win or a loss?", view=view)
+        active_redzones[self.postal_code].append(msg)
+
+async def handle_redzone_end(postal_code, result, participants, guild, channel, interaction):
+    for msg in active_redzones.get(postal_code, []):
+        try:
+            for comp in msg.components:
+                for child in comp.children:
+                    child.disabled = True
+            await msg.edit(view=msg.components[0].view if msg.components else None)
+        except:
+            pass
+
+    await asyncio.sleep(1)
+    for msg in active_redzones.get(postal_code, []):
+        try:
             await msg.delete()
+        except:
+            pass
+    active_redzones.pop(postal_code, None)
 
-    await channel.send(embed=embed)
+    if result == "win" and participants:
+        split = WIN_AMOUNT // len(participants)
+        for uid in participants:
+            uid_str = str(uid)
+            redzone_data[uid_str]["wins"] += 1
+            redzone_data[uid_str]["earned"] += split
+        save_json(DATA_FILE, redzone_data)
+        await update_leaderboard(guild)
+        await channel.send(f"✅ Redzone at Postal {postal_code} marked as a **WIN**! Each participant gets £{split:,}.")
+    else:
+        await channel.send(f"❌ Redzone at Postal {postal_code} marked as a **LOSS**. No payout.")
+
+class ResetView(View):
+    @discord.ui.button(label="Payout & Reset", style=discord.ButtonStyle.danger)
+    async def reset(self, interaction: discord.Interaction, button: Button):
+        if ADMIN_ROLE_ID not in [role.id for role in interaction.user.roles]:
+            await interaction.response.send_message("❌ You don't have permission to reset the leaderboard.", ephemeral=True)
+            return
+        redzone_data.clear()
+        joined_users.clear()
+        save_json(DATA_FILE, redzone_data)
+        await update_leaderboard(interaction.guild)
+        await interaction.response.send_message("✅ Leaderboard has been reset!", ephemeral=True)
+
+async def update_leaderboard(guild):
+    global leaderboard_message
+    channel = guild.get_channel(LEADERBOARD_CHANNEL_ID)
+
+    all_data = {
+        uid: redzone_data.get(uid, {"joined": 0, "wins": 0, "earned": 0})
+        for uid in joined_users
+    }
+    leaderboard = sorted(all_data.items(), key=lambda x: x[1]["earned"], reverse=True)
+
+    desc = ""
+    sus_section = ""
+    for uid, stats in leaderboard:
+        member = guild.get_member(int(uid))
+        if not member:
+            continue
+        desc += f"<@{uid}> — £{stats['earned']:,} ({stats['joined']} joins / {stats['wins']} wins)\n"
+        if stats["joined"] >= 3 and stats["wins"] == 0:
+            sus_section += f"🚨 <@{uid}> — {stats['joined']} joins / {stats['wins']} wins\n"
+
+    if sus_section:
+        desc += f"\n__**Sus Players**__\n{sus_section}"
+
+    embed = discord.Embed(
+        title="🏆 Redzone Earnings Leaderboard",
+        description=desc or "No participants yet.",
+        color=0x00ff00
+    )
+
+    if leaderboard_message:
+        await leaderboard_message.edit(embed=embed)
+    else:
+        leaderboard_message = await channel.send(embed=embed, view=ResetView())
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
-    bot.add_view(WorkPanel())
-    panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
-    if panel_channel:
-        async for msg in panel_channel.history(limit=5):
-            if msg.author == bot.user:
-                await msg.delete()
-        await panel_channel.send("**Work Panel**", view=WorkPanel())
+    print(f"✅ Logged in as {bot.user}")
+    guild = bot.guilds[0]
+    redzone_channel = guild.get_channel(CHANNEL_ID)
 
-bot.run(DISCORD_BOT_TOKEN)
+    view = PermanentRedzoneView()
+    await update_leaderboard(guild)
+    await redzone_channel.send("🔘 Use the button below to start a Redzone round:", view=view)
+
+bot.run(TOKEN)
+
