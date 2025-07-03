@@ -30,12 +30,12 @@ LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
 LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID"))
 
 PRICE_CONFIG = {
-    "car": 50000,
-    "bike": 50000,
-    "engine": 500000,
-    "car_full": 850000,
+    "car": 30000,
+    "bike": 30000,
+    "engine": 300000,
+    "car_full": 700000,
     "bike_full": 300000,
-    "repair": 25000
+    "repair": 15000
 }
 
 class ResetView(discord.ui.View):
