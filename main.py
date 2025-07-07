@@ -1,4 +1,4 @@
-
+# FULL CODE — PART 1
 import discord
 from discord.ext import commands
 import os
@@ -50,7 +50,7 @@ class ResetView(discord.ui.View):
         work_data.clear()
         await interaction.response.send_message("✅ Leaderboard has been reset.", ephemeral=True)
         await update_leaderboard()
-
+# FULL CODE — PART 2 (continued)
 class WorkPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -90,7 +90,7 @@ class WorkPanel(discord.ui.View):
         await interaction.response.send_message(f"{action.replace('_', ' ').title()} recorded!", ephemeral=True)
         await log_action(f"{interaction.user.mention} performed {action.replace('_', ' ').title()} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
         await update_leaderboard()
-
+        # FULL CODE — PART 3 (continued)
     @discord.ui.button(label="Car Part", style=discord.ButtonStyle.primary, custom_id="car")
     async def upgrade_car(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "car")
@@ -129,20 +129,25 @@ class WorkPanel(discord.ui.View):
             await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
             return
         await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetView(), ephemeral=True)
-
+        # FULL CODE — PART 4 (end of file)
 async def log_action(message: str):
-    channel = bot.get_channel(LOG_CHANNEL_ID)
-    if channel:
-        await channel.send(message)
+    try:
+        channel = await bot.fetch_channel(LOG_CHANNEL_ID)
+        if channel:
+            await channel.send(message)
+    except Exception as e:
+        print(f"Logging failed: {e}")
 
 async def update_leaderboard():
-    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
-    if not channel:
+    try:
+        channel = await bot.fetch_channel(LEADERBOARD_CHANNEL_ID)
+    except:
         print("❌ LEADERBOARD_CHANNEL_ID is invalid or missing.")
         return
 
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
     embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
+    total_earned = 0
 
     for user_id, data in leaderboard:
         try:
@@ -152,20 +157,21 @@ async def update_leaderboard():
             user_name = f"<@{user_id}>"
 
         time_str = str(timedelta(seconds=int(data["total_time"])))
+        earned = data["earnings"]
+        total_earned += earned
+
         embed.add_field(
             name=user_name,
-            value=(
-                f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
-                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']} | 🔧 Repair: {data['repair']}\n"
-                f"💳 Earnings: £{data['earnings']:,}\n"
-                f"⏱️ Time Clocked: {time_str}"
-            ),
+            value=(f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']} | 🛠️ Engine: {data['engine']} | "
+                   f"🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']} | 🔧 Repair: {data['repair']}\n"
+                   f"💳 Earnings: £{earned:,} | ⏱️ Time: {time_str}"),
             inline=False
         )
 
-    history = [msg async for msg in channel.history(limit=5)]
-    for msg in history:
-        if msg.author == bot.user:
+    embed.set_footer(text=f"💰 Total Earnings: £{total_earned:,}")
+
+    async for msg in channel.history(limit=5):
+        if msg.author == bot.user and msg.embeds:
             await msg.delete()
 
     await channel.send(embed=embed)
@@ -181,5 +187,8 @@ async def on_ready():
                 await msg.delete()
         await panel_channel.send("**Work Panel**", view=WorkPanel())
         await update_leaderboard()
+
+if not DISCORD_BOT_TOKEN:
+    raise ValueError("❌ DISCORD_BOT_TOKEN not set in environment variables.")
 
 bot.run(DISCORD_BOT_TOKEN)
