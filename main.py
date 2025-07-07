@@ -146,29 +146,35 @@ async def update_leaderboard():
         return
 
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
-    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
+
+    lines = []
     total_earned = 0
 
     for user_id, data in leaderboard:
         try:
             user = await bot.fetch_user(int(user_id))
-            user_name = user.name
+            name = user.name
         except:
-            user_name = f"<@{user_id}>"
+            name = f"<@{user_id}>"
 
-        time_str = str(timedelta(seconds=int(data["total_time"])))
-        earned = data["earnings"]
+        earned = data['earnings']
         total_earned += earned
+        time_str = str(timedelta(seconds=int(data["total_time"])))
 
-        embed.add_field(
-            name=user_name,
-            value=(f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']} | 🛠️ Engine: {data['engine']} | "
-                   f"🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']} | 🔧 Repair: {data['repair']}\n"
-                   f"💳 Earnings: £{earned:,} | ⏱️ Time: {time_str}"),
-            inline=False
+        lines.append(
+            f"{name}\n"
+            f"  🚗 Car: {data['car']} | 🛵 Bike: {data['bike']} | 🛠️ Engine: {data['engine']}\n"
+            f"  🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']} | 🔧 Repair: {data['repair']}\n"
+            f"  💳 Earnings: £{earned:,} | ⏱️ Time: {time_str}\n"
         )
 
-    embed.set_footer(text=f"💰 Total Earnings: £{total_earned:,}")
+    leaderboard_text = "🏆 Work Leaderboard\n\n" + "\n".join(lines) + f"\n💰 Total Earnings: £{total_earned:,}"
+
+    async for msg in channel.history(limit=5):
+        if msg.author == bot.user:
+            await msg.delete()
+
+    await channel.send(f"```{leaderboard_text}```")
 
     async for msg in channel.history(limit=5):
         if msg.author == bot.user and msg.embeds:
