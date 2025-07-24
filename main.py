@@ -1,9 +1,9 @@
 import os
 import discord
-from discord.ext import commands, tasks
-from discord.ui import View, Button, Select, SelectOption
+from discord.ext import commands
+from discord.ui import View, Button, Select
+from discord import SelectOption
 from datetime import datetime, timedelta
-import asyncio
 
 intents = discord.Intents.default()
 intents.members = True
@@ -39,10 +39,7 @@ def format_leaderboard(guild):
     if not users_data:
         return "No data yet."
     
-    leaderboard = sorted(users_data.items(), key=lambda x: sum(
-        x[1].get("earnings", 0)
-    ), reverse=True)
-
+    leaderboard = sorted(users_data.items(), key=lambda x: x[1].get("earnings", 0), reverse=True)
     embed = discord.Embed(title="📊 Work Leaderboard", color=discord.Color.gold())
     total_earned = 0
 
