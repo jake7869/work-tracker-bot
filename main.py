@@ -1,6 +1,6 @@
-# FULL CODE — PART 1
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -8,8 +8,9 @@ from collections import defaultdict
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+ADMIN_ROLE_ID = 1391785348262264925
 
 work_data = defaultdict(lambda: {
     "clocked_in": False,
@@ -19,7 +20,6 @@ work_data = defaultdict(lambda: {
     "engine": 0,
     "car_full": 0,
     "bike_full": 0,
-    "repair": 0,
     "earnings": 0,
     "total_time": 0
 })
@@ -30,30 +30,32 @@ LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
 LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID"))
 
 PRICE_CONFIG = {
-    "car": 30000,
-    "bike": 30000,
-    "engine": 300000,
-    "car_full": 700000,
-    "bike_full": 300000,
-    "repair": 15000
+    "car": 50000,
+    "bike": 50000,
+    "engine": 500000,
+    "car_full": 850000,
+    "bike_full": 300000
 }
 
-class ResetView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=60)
+async def log_action(message: str):
+    channel = bot.get_channel(LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(message)
 
-    @discord.ui.button(label="⚠️ Confirm Reset", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("Only admins can reset the leaderboard.", ephemeral=True)
-            return
-        work_data.clear()
-        await interaction.response.send_message("✅ Leaderboard has been reset.", ephemeral=True)
-        await update_leaderboard()
-# FULL CODE — PART 2 (continued)
 class WorkPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+
+    async def handle_action(self, interaction, action):
+        user_id = str(interaction.user.id)
+        if not work_data[user_id]["clocked_in"]:
+            await interaction.response.send_message("You must clock in before performing this action.", ephemeral=True)
+            return
+        work_data[user_id][action] += 1
+        work_data[user_id]["earnings"] += PRICE_CONFIG[action]
+        await interaction.response.send_message(f"{action.replace('_', ' ').title()} recorded!", ephemeral=True)
+        await log_action(f"🛠️ {interaction.user.mention} did **{action.replace('_', ' ').title()}**")
+        await update_leaderboard()
 
     @discord.ui.button(label="Clock In", style=discord.ButtonStyle.success, custom_id="clock_in")
     async def clock_in(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -64,7 +66,7 @@ class WorkPanel(discord.ui.View):
             work_data[user_id]["clocked_in"] = True
             work_data[user_id]["last_clock_in"] = datetime.utcnow()
             await interaction.response.send_message("You clocked in!", ephemeral=True)
-            await log_action(f"{interaction.user.mention} Clocked In at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+            await log_action(f"✅ {interaction.user.mention} clocked in.")
 
     @discord.ui.button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clock_out")
     async def clock_out(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -72,25 +74,13 @@ class WorkPanel(discord.ui.View):
         if not work_data[user_id]["clocked_in"]:
             await interaction.response.send_message("You are not clocked in.", ephemeral=True)
         else:
-            start = work_data[user_id]["last_clock_in"]
-            duration = (datetime.utcnow() - start).total_seconds()
+            duration = (datetime.utcnow() - work_data[user_id]["last_clock_in"]).total_seconds()
             work_data[user_id]["total_time"] += duration
             work_data[user_id]["clocked_in"] = False
             work_data[user_id]["last_clock_in"] = None
             await interaction.response.send_message("You clocked out!", ephemeral=True)
-            await log_action(f"{interaction.user.mention} Clocked Out at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+            await log_action(f"🛑 {interaction.user.mention} clocked out. Time added: {int(duration)}s")
 
-    async def handle_action(self, interaction, action):
-        user_id = str(interaction.user.id)
-        if not work_data[user_id]["clocked_in"]:
-            await interaction.response.send_message("You must clock in before performing this action.", ephemeral=True)
-            return
-        work_data[user_id][action] += 1
-        work_data[user_id]["earnings"] += PRICE_CONFIG[action]
-        await interaction.response.send_message(f"{action.replace('_', ' ').title()} recorded!", ephemeral=True)
-        await log_action(f"{interaction.user.mention} performed {action.replace('_', ' ').title()} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
-        await update_leaderboard()
-        # FULL CODE — PART 3 (continued)
     @discord.ui.button(label="Car Part", style=discord.ButtonStyle.primary, custom_id="car")
     async def upgrade_car(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "car")
@@ -111,80 +101,44 @@ class WorkPanel(discord.ui.View):
     async def bike_full_upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_action(interaction, "bike_full")
 
-    @discord.ui.button(label="Repair", style=discord.ButtonStyle.primary, custom_id="repair")
-    async def repair_action(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_action(interaction, "repair")
-
-    @discord.ui.button(label="🔄 Refresh Leaderboard", style=discord.ButtonStyle.secondary, custom_id="refresh_leaderboard")
-    async def refresh_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ Only admins can refresh the leaderboard.", ephemeral=True)
-            return
-        await update_leaderboard()
-        await interaction.response.send_message("✅ Leaderboard refreshed!", ephemeral=True)
-
-    @discord.ui.button(label="⚠️ Reset Leaderboard", style=discord.ButtonStyle.danger, custom_id="reset_leaderboard")
-    async def reset_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You do not have permission to reset the leaderboard.", ephemeral=True)
-            return
-        await interaction.response.send_message("⚠️ Are you sure you want to reset the leaderboard?", view=ResetView(), ephemeral=True)
-        # FULL CODE — PART 4 (end of file)
-async def log_action(message: str):
-    try:
-        channel = await bot.fetch_channel(LOG_CHANNEL_ID)
-        if channel:
-            await channel.send(message)
-    except Exception as e:
-        print(f"Logging failed: {e}")
-
 async def update_leaderboard():
-    try:
-        channel = await bot.fetch_channel(LEADERBOARD_CHANNEL_ID)
-    except:
-        print("❌ LEADERBOARD_CHANNEL_ID is invalid or missing.")
+    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
+    if not channel:
         return
 
     leaderboard = sorted(work_data.items(), key=lambda x: x[1]["earnings"], reverse=True)
-
-    lines = []
-    total_earned = 0
+    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.gold())
 
     for user_id, data in leaderboard:
         try:
             user = await bot.fetch_user(int(user_id))
-            name = user.name
+            user_name = user.name
         except:
-            name = f"<@{user_id}>"
-
-        earned = data['earnings']
-        total_earned += earned
+            user_name = f"<@{user_id}>"
         time_str = str(timedelta(seconds=int(data["total_time"])))
-
-        lines.append(
-            f"{name}\n"
-            f"  🚗 Car: {data['car']} | 🛵 Bike: {data['bike']} | 🛠️ Engine: {data['engine']}\n"
-            f"  🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']} | 🔧 Repair: {data['repair']}\n"
-            f"  💳 Earnings: £{earned:,} | ⏱️ Time: {time_str}\n"
+        embed.add_field(
+            name=user_name,
+            value=(
+                f"🚗 Car: {data['car']} | 🛵 Bike: {data['bike']}\n"
+                f"🛠️ Engine: {data['engine']} | 🚙 Car Full: {data['car_full']} | 🏍️ Bike Full: {data['bike_full']}\n"
+                f"💳 Earnings: £{data['earnings']:,}\n"
+                f"⏱️ Time Clocked: {time_str}"
+            ),
+            inline=False
         )
 
-    leaderboard_text = "🏆 Work Leaderboard\n\n" + "\n".join(lines) + f"\n💰 Total Earnings: £{total_earned:,}"
-
-    async for msg in channel.history(limit=5):
+    # Remove previous bot messages
+    history = [msg async for msg in channel.history(limit=5)]
+    for msg in history:
         if msg.author == bot.user:
             await msg.delete()
-
-    await channel.send(f"```{leaderboard_text}```")
-
-    async for msg in channel.history(limit=5):
-        if msg.author == bot.user and msg.embeds:
-            await msg.delete()
-
     await channel.send(embed=embed)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}")
+    bot.tree.copy_global_to(guild=None)
+    await bot.tree.sync()
     bot.add_view(WorkPanel())
     panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
     if panel_channel:
@@ -194,7 +148,58 @@ async def on_ready():
         await panel_channel.send("**Work Panel**", view=WorkPanel())
         await update_leaderboard()
 
-if not DISCORD_BOT_TOKEN:
-    raise ValueError("❌ DISCORD_BOT_TOKEN not set in environment variables.")
+# -------------------- ADMIN COMMANDS --------------------
+
+def is_admin(interaction: discord.Interaction):
+    return any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
+
+@bot.tree.command(name="set_clock", description="Set a user's clocked in status (admin only)")
+@app_commands.describe(user="Target user", status="on/off")
+async def set_clock(interaction: discord.Interaction, user: discord.Member, status: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("You don't have permission.", ephemeral=True)
+        return
+
+    user_id = str(user.id)
+    if status == "on":
+        work_data[user_id]["clocked_in"] = True
+        work_data[user_id]["last_clock_in"] = datetime.utcnow()
+        await interaction.response.send_message(f"{user.mention} has been clocked in.")
+    elif status == "off":
+        if work_data[user_id]["clocked_in"]:
+            duration = (datetime.utcnow() - work_data[user_id]["last_clock_in"]).total_seconds()
+            work_data[user_id]["total_time"] += duration
+        work_data[user_id]["clocked_in"] = False
+        work_data[user_id]["last_clock_in"] = None
+        await interaction.response.send_message(f"{user.mention} has been clocked out.")
+    else:
+        await interaction.response.send_message("Status must be 'on' or 'off'.", ephemeral=True)
+
+@bot.tree.command(name="remove_work", description="Remove work count from a user (admin only)")
+@app_commands.describe(user="Target user", type="Work type", amount="How many to remove")
+async def remove_work(interaction: discord.Interaction, user: discord.Member, type: str, amount: int):
+    if not is_admin(interaction):
+        await interaction.response.send_message("You don't have permission.", ephemeral=True)
+        return
+
+    if type not in PRICE_CONFIG:
+        await interaction.response.send_message("Invalid work type.", ephemeral=True)
+        return
+
+    user_id = str(user.id)
+    work_data[user_id][type] = max(0, work_data[user_id][type] - amount)
+    work_data[user_id]["earnings"] = max(0, work_data[user_id]["earnings"] - (amount * PRICE_CONFIG[type]))
+    await interaction.response.send_message(f"Removed {amount}x {type} from {user.mention}.")
+
+@bot.tree.command(name="remove_time", description="Remove clocked in time from a user (admin only)")
+@app_commands.describe(user="Target user", seconds="How many seconds to remove")
+async def remove_time(interaction: discord.Interaction, user: discord.Member, seconds: int):
+    if not is_admin(interaction):
+        await interaction.response.send_message("You don't have permission.", ephemeral=True)
+        return
+
+    user_id = str(user.id)
+    work_data[user_id]["total_time"] = max(0, work_data[user_id]["total_time"] - seconds)
+    await interaction.response.send_message(f"Removed {seconds} seconds from {user.mention}'s total time.")
 
 bot.run(DISCORD_BOT_TOKEN)
