@@ -21,11 +21,11 @@ users_data = {}
 message_ids = {"panel": None, "leaderboard": None}
 
 PRICES = {
-    "Car Part": 50000,
-    "Bike Part": 50000,
-    "Car Full Upgrade": 850000,
-    "Bike Full Upgrade": 300000,
-    "Engine Upgrade": 500000
+    "Car Part": 20000,
+    "Bike Part": 20000,
+    "Car Full Upgrade": 500000,
+    "Bike Full Upgrade": 250000,
+    "Engine Upgrade": 250000
 }
 
 def get_status_emoji(user_id):
