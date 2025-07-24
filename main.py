@@ -253,4 +253,4 @@ async def admin_remove_time(interaction: discord.Interaction, user: discord.User
     await interaction.response.send_message(f"Removed total time for {user.mention}.")
 
 # --- RUN BOT ---
-bot.run("MTM2NDA2MjgyMzYyNTI2MTA2Ng.GtMCl4.xEOep1zfPVaK5yQSiJbRLjEuE236uIlcnPfJAA")
+bot.run(os.getenv("DISCORD_TOKEN"))
