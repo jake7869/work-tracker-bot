@@ -30,13 +30,12 @@ LEADERBOARD_CHANNEL_ID = int(os.getenv("LEADERBOARD_CHANNEL_ID"))
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 ADMIN_ROLE_ID = 1391785348262264925
 
-PRICE_CONFIG = {
-    "car": 50000,
-    "bike": 50000,
-    "engine": 500000,
-    "car_full": 850000,
-    "bike_full": 300000,
-    "repair": 25000
+PRICES = {
+    "Car Part": 20000,
+    "Bike Part": 20000,
+    "Car Full Upgrade": 500000,
+    "Bike Full Upgrade": 250000,
+    "Engine Upgrade": 250000
 }
 
 class WorkPanel(discord.ui.View):
