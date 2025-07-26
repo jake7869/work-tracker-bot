@@ -187,4 +187,5 @@ async def auto_clockout():
 async def update_leaderboard():
     await update_leaderboard()
 
-bot.run("YOUR_TOKEN_HERE")
+import os
+bot.run(os.getenv("DISCORD_TOKEN"))
