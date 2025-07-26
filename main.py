@@ -182,7 +182,7 @@ async def update_leaderboard():
         )
         time = str(timedelta(seconds=data.get("time", 0)))
         status = get_status_icon(user_id)
-        embed.add_field(name=f"{status} {get_username(channel.guild, user_id)}", value=f"💰 £{total:,}
+        embed.add_field(name=f"{status} {get_username(channel.guild, user_id)}", value=f"💰 £{total:,}")
 ⏱️ {time}", inline=False)
 
     await channel.send(embed=embed)
