@@ -83,10 +83,14 @@ async def on_interaction(interaction: discord.Interaction):
     now = datetime.now(timezone.utc)
 
     if cid == "clock_in":
+        if data["clocked_in"]:
+            await interaction.followup.send("You're already clocked in!", ephemeral=True)
+            return
         data["clocked_in"] = True
         data["start"] = now
         dm_warned.pop(user_id, None)
         await log_action(f"🟢 Clock In - {user.mention}")
+        await update_leaderboard(force=True)
     elif cid == "clock_out":
         if data["clocked_in"]:
             elapsed = (now - data["start"]).total_seconds()
@@ -95,6 +99,7 @@ async def on_interaction(interaction: discord.Interaction):
             data["start"] = None
             dm_warned.pop(user_id, None)
             await log_action(f"🔴 Clock Out - {user.mention} ({int(elapsed // 60)} mins)")
+            await update_leaderboard(force=True)
     elif cid in ["car_upgrade", "bike_upgrade", "engine_upgrade", "car_part", "bike_part"]:
         if not data["clocked_in"]:
             await interaction.followup.send("Clock in first!", ephemeral=True)
@@ -115,6 +120,7 @@ async def on_interaction(interaction: discord.Interaction):
         }
         data[field_map[cid]] += 1
         await log_action(f"{label_map[cid]} - {user.mention}")
+        await update_leaderboard(force=True)
 
 @tasks.loop(seconds=60)
 async def check_clockout():
