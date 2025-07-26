@@ -65,7 +65,11 @@ class WorkButtons(discord.ui.View):
             await interaction.response.send_message("⚠️ You're already clocked in!", ephemeral=True)
             return
         clocked_in_users[user_id] = datetime.datetime.utcnow()
-        data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
+        if user_id not in data:
+            data[user_id] = {task: 0 for task in TASK_LABELS}
+            data[user_id]["time"] = 0
+            data[user_id]["total"] = 0
+            await update_leaderboard(interaction.guild)
         data[user_id].setdefault("time", 0)
         data[user_id].setdefault("total", 0)
         await interaction.response.send_message("📊 You are now clocked in.", ephemeral=True)
