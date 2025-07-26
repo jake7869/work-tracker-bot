@@ -44,7 +44,6 @@ async def send_panel():
     await channel.purge()
 
     view = View(timeout=None)
-
     view.add_item(Button(label="Clock In", style=discord.ButtonStyle.green, custom_id="clock_in"))
     view.add_item(Button(label="Clock Out", style=discord.ButtonStyle.red, custom_id="clock_out"))
     view.add_item(Button(label="Car Full Upgrade", style=discord.ButtonStyle.blurple, custom_id="car_upgrade"))
@@ -80,7 +79,6 @@ async def on_interaction(interaction: discord.Interaction):
     })
 
     await interaction.response.defer()
-
     cid = interaction.data["custom_id"]
     now = datetime.now(timezone.utc)
 
@@ -112,7 +110,7 @@ async def on_interaction(interaction: discord.Interaction):
             "car_upgrade": "🚗 Car Full Upgrade",
             "bike_upgrade": "🛵 Bike Full Upgrade",
             "engine_upgrade": "⚙️ Engine Upgrade",
-            "car_part": "🧹 Car Part",
+            "car_part": "🧩 Car Part",
             "bike_part": "💪 Bike Part"
         }
         data[field_map[cid]] += 1
@@ -124,11 +122,10 @@ async def check_clockout():
     for user_id, data in list(user_data.items()):
         if data.get("clocked_in") and data.get("start"):
             elapsed = (now - data["start"]).total_seconds()
-
-            if elapsed >= 3 * 3600 and user_id not in dm_warned:
+            if elapsed >= 2 * 3600 and user_id not in dm_warned:
                 user = await bot.fetch_user(user_id)
                 try:
-                    await user.send("⏰ You've been clocked in for 3 hours. Please reply or clock out within 30 minutes, or you’ll be auto clocked out and penalized.")
+                    await user.send("⏰ You've been clocked in for 2 hours. Please reply or clock out within 30 minutes, or you’ll be auto clocked out and penalized.")
                     dm_warned[user_id] = now
                 except:
                     pass
@@ -137,14 +134,14 @@ async def check_clockout():
                     user = await bot.fetch_user(user_id)
                     data["clocked_in"] = False
                     data["start"] = None
-                    data["time"] = max(0, data["time"] - 32400)
+                    data["time"] = max(0, data["time"] - 21600)
                     strikes[user_id] = strikes.get(user_id, 0) + 1
                     dm_warned.pop(user_id, None)
                     try:
-                        await user.send("⚠️ You were auto clocked out for being AFK too long.\n\➖ 9 hours removed\n➕ 1 strike")
+                        await user.send("⚠️ You were auto clocked out for being AFK too long.\n➖ 6 hours removed\n➕ 1 strike")
                     except:
                         pass
-                    await log_action(f"🚨 Auto Clock-Out: {user.mention} (-9h, +1 strike) <@&{ADMIN_ROLE_ID}>")
+                    await log_action(f"🚨 Auto Clock-Out: {user.mention} (-6h, +1 strike) <@&{ADMIN_ROLE_ID}>")
                     if strikes[user_id] >= 3:
                         user_data.pop(user_id, None)
                         strikes[user_id] = 0
@@ -179,14 +176,21 @@ async def update_leaderboard(force=False):
             data["bike_part"] * 20000
         )
         total_money += total
-        hours = str(timedelta(seconds=data["time"]))
+        live_time = data["time"]
+        if data["clocked_in"] and data["start"]:
+            live_time += int((datetime.now(timezone.utc) - data["start"]).total_seconds())
+
+        hours = str(timedelta(seconds=live_time))
         status = get_status_icon(user_id)
         name = f"{status} {get_username(channel.guild, user_id)}"
         value = (
             f"💰 £{total:,}\n"
             f"⏱ Time Worked: {hours}\n"
-            f"🚗 {data['car']} | 🛵 {data['bike']} | ⚙️ {data['engine']}\n"
-            f"🧹 {data['car_part']} | 💪 {data['bike_part']}"
+            f"🚗 Car Full Upgrades: {data['car']}\n"
+            f"🛵 Bike Full Upgrades: {data['bike']}\n"
+            f"⚙️ Engine Upgrades: {data['engine']}\n"
+            f"🧩 Car Parts: {data['car_part']}\n"
+            f"💪 Bike Parts: {data['bike_part']}"
         )
         embed.add_field(name=name, value=value, inline=False)
 
