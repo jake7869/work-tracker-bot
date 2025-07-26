@@ -198,4 +198,5 @@ async def panel(ctx):
     channel = bot.get_channel(PANEL_CHANNEL)
     await channel.send("**Work Panel**", view=WorkButtons())
 
-bot.run("YOUR_TOKEN")
+import os
+bot.run(os.getenv("DISCORD_TOKEN"))
