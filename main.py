@@ -69,6 +69,15 @@ class WorkButtons(discord.ui.View):
         data[user_id].setdefault("time", 0)
         data[user_id].setdefault("total", 0)
         await interaction.response.send_message("📊 You are now clocked in.", ephemeral=True)
+
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(f"🟢 {interaction.user.mention} clocked in.")
+        clocked_in_users[user_id] = datetime.datetime.utcnow()
+        data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
+        data[user_id].setdefault("time", 0)
+        data[user_id].setdefault("total", 0)
+        await interaction.response.send_message("📊 You are now clocked in.", ephemeral=True)
         await update_leaderboard(interaction.guild)
 
     @discord.ui.button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clock_out")
@@ -77,6 +86,14 @@ class WorkButtons(discord.ui.View):
         if user_id not in clocked_in_users:
             await interaction.response.send_message("❌ You are not clocked in.", ephemeral=True)
             return
+        delta = (datetime.datetime.utcnow() - clocked_in_users[user_id]).total_seconds()
+        data[user_id]["time"] += delta
+        del clocked_in_users[user_id]
+        await interaction.response.send_message("⏹️ You are now clocked out.", ephemeral=True)
+
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(f"🔴 {interaction.user.mention} clocked out after {format_timedelta(delta)}.")
         delta = (datetime.datetime.utcnow() - clocked_in_users[user_id]).total_seconds()
         data[user_id]["time"] += delta
         del clocked_in_users[user_id]
@@ -108,6 +125,15 @@ async def log_task(interaction, task):
     user_id = interaction.user.id
     if user_id not in clocked_in_users:
         await interaction.response.send_message("Please clock in before doing tasks!", ephemeral=True)
+        return
+    data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
+    data[user_id][task] += 1
+    data[user_id]["total"] += PRICES[task]
+    await interaction.response.send_message(f"{TASK_ICONS[task]} {TASK_LABELS[task]} logged. £{PRICES[task]:,} earned.", ephemeral=True)
+
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if log_channel:
+        await log_channel.send(f"✅ {interaction.user.mention} completed: **{TASK_LABELS[task]}** - Earned £{PRICES[task]:,}")
         return
     data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
     data[user_id][task] += 1
