@@ -1,150 +1,182 @@
 import discord
 from discord.ext import commands, tasks
-from discord.ui import View, Button, Select
-from discord import app_commands
 import asyncio
-from datetime import datetime, timedelta
+import datetime
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ====== CONFIG ======
+PANEL_CHANNEL_ID = 1344409201123786758
+LEADERBOARD_CHANNEL_ID = 1364065995408281651
+LOG_CHANNEL_ID = 1390028891791298731
+ADMIN_ROLE_ID = 1391785348262264925
+AUTO_CLOCKOUT_MINUTES = 120  # 2 hours
+
+# ====== DATA ======
 data = {}
-clocked_in = {}
-strike_count = {}
+clocked_in_users = {}
 leaderboard_message = None
 
-CHANNEL_ID = 1234567890  # Replace with your leaderboard channel ID
-ADMIN_ROLE_ID = 987654321  # Replace with your admin role ID
+PRICES = {
+    'car_part': 20000,
+    'bike_part': 20000,
+    'engine_upgrade': 250000,
+    'car_upgrade': 500000,
+    'bike_upgrade': 250000,
+}
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    update_leaderboard.start()
+TASK_LABELS = {
+    'car_upgrade': "Car Full Upgrades",
+    'bike_upgrade': "Bike Full Upgrades",
+    'engine_upgrade': "Engine Upgrades",
+    'car_part': "Car Parts",
+    'bike_part': "Bike Parts",
+}
 
-class WorkButtons(View):
+TASK_ICONS = {
+    'car_upgrade': "🚗",
+    'bike_upgrade': "🏍️",
+    'engine_upgrade': "⚙️",
+    'car_part': "✈️",
+    'bike_part': "💪",
+}
+
+# ====== UTILS ======
+def get_username(guild, user_id):
+    member = guild.get_member(user_id)
+    return member.display_name if member else f"<@{user_id}>"
+
+def format_timedelta(seconds):
+    return str(datetime.timedelta(seconds=int(seconds)))
+
+# ====== VIEW ======
+class WorkButtons(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(Button(label="Clock In", custom_id="clock_in"))
-        self.add_item(Button(label="Clock Out", custom_id="clock_out"))
-        self.add_item(Button(label="Car Part", custom_id="car_part"))
-        self.add_item(Button(label="Bike Part", custom_id="bike_part"))
-        self.add_item(Button(label="Engine Upgrade", custom_id="engine_upgrade"))
-        self.add_item(Button(label="Car Full Upgrade", custom_id="car_full"))
-        self.add_item(Button(label="Bike Full Upgrade", custom_id="bike_full"))
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    user_id = str(interaction.user.id)
-    username = interaction.user.display_name
-    now = datetime.utcnow()
+    @discord.ui.button(label="Clock In", style=discord.ButtonStyle.success, custom_id="clock_in")
+    async def clock_in(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+        if user_id in clocked_in_users:
+            await interaction.response.send_message("⚠️ You're already clocked in!", ephemeral=True)
+            return
+        clocked_in_users[user_id] = datetime.datetime.utcnow()
+        data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
+        data[user_id].setdefault("time", 0)
+        data[user_id].setdefault("total", 0)
+        await interaction.response.send_message("📊 You are now clocked in.", ephemeral=True)
+        await update_leaderboard(interaction.guild)
 
-    if interaction.data['component_type'] == 2:  # Button press
-        button_id = interaction.data['custom_id']
+    @discord.ui.button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clock_out")
+    async def clock_out(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+        if user_id not in clocked_in_users:
+            await interaction.response.send_message("❌ You are not clocked in.", ephemeral=True)
+            return
+        delta = (datetime.datetime.utcnow() - clocked_in_users[user_id]).total_seconds()
+        data[user_id]["time"] += delta
+        del clocked_in_users[user_id]
+        await interaction.response.send_message("⏹️ You are now clocked out.", ephemeral=True)
+        await update_leaderboard(interaction.guild)
 
-        if user_id not in data:
-            data[user_id] = {"name": username, "time": 0, "tasks": {"car": 0, "bike": 0, "engine": 0, "car_part": 0, "bike_part": 0}, "earnings": 0, "status": "🔴"}
+    @discord.ui.button(label="Car Full Upgrade", style=discord.ButtonStyle.primary, custom_id="car_upgrade")
+    async def car_upgrade(self, interaction, button):
+        await log_task(interaction, "car_upgrade")
 
-        if button_id == "clock_in":
-            if user_id in clocked_in:
-                await interaction.response.send_message("⚠️ You are already clocked in.", ephemeral=True)
-                return
-            clocked_in[user_id] = now
-            data[user_id]["status"] = "🟢"
-            await interaction.response.send_message("✅ You are now clocked in.", ephemeral=True)
-            asyncio.create_task(watch_clock(user_id, interaction.user))
+    @discord.ui.button(label="Bike Full Upgrade", style=discord.ButtonStyle.primary, custom_id="bike_upgrade")
+    async def bike_upgrade(self, interaction, button):
+        await log_task(interaction, "bike_upgrade")
 
-        elif button_id == "clock_out":
-            if user_id not in clocked_in:
-                await interaction.response.send_message("⚠️ You are not clocked in.", ephemeral=True)
-                return
-            start = clocked_in.pop(user_id)
-            worked = (now - start).total_seconds()
-            data[user_id]["time"] += worked
-            data[user_id]["status"] = "🔴"
-            await interaction.response.send_message(f"⏱️ You are now clocked out. Time worked: {int(worked//60)} minutes.", ephemeral=True)
+    @discord.ui.button(label="Engine Upgrade", style=discord.ButtonStyle.primary, custom_id="engine_upgrade")
+    async def engine_upgrade(self, interaction, button):
+        await log_task(interaction, "engine_upgrade")
 
-        elif user_id in clocked_in:
-            task_map = {
-                "car_part": ("Car Parts", "car_part", 20000),
-                "bike_part": ("Bike Parts", "bike_part", 20000),
-                "engine_upgrade": ("Engine Upgrades", "engine", 250000),
-                "car_full": ("Car Full Upgrades", "car", 500000),
-                "bike_full": ("Bike Full Upgrades", "bike", 250000),
-            }
-            if button_id in task_map:
-                label, key, amount = task_map[button_id]
-                data[user_id]["tasks"][key] += 1
-                data[user_id]["earnings"] += amount
-                await interaction.response.send_message(f"🛠️ {label} logged. £{amount:,} earned.", ephemeral=True)
+    @discord.ui.button(label="Car Part", style=discord.ButtonStyle.secondary, custom_id="car_part")
+    async def car_part(self, interaction, button):
+        await log_task(interaction, "car_part")
 
-        else:
-            await interaction.response.send_message("⚠️ You must clock in first.", ephemeral=True)
+    @discord.ui.button(label="Bike Part", style=discord.ButtonStyle.secondary, custom_id="bike_part")
+    async def bike_part(self, interaction, button):
+        await log_task(interaction, "bike_part")
 
-@tasks.loop(seconds=30)
-async def update_leaderboard():
-    global leaderboard_message
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
+# ====== TASK LOGGING ======
+async def log_task(interaction, task):
+    user_id = interaction.user.id
+    if user_id not in clocked_in_users:
+        await interaction.response.send_message("Please clock in before doing tasks!", ephemeral=True)
         return
+    data.setdefault(user_id, {task: 0 for task in TASK_LABELS})
+    data[user_id][task] += 1
+    data[user_id]["total"] += PRICES[task]
+    await interaction.response.send_message(f"{TASK_ICONS[task]} {TASK_LABELS[task]} logged. £{PRICES[task]:,} earned.", ephemeral=True)
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    await log_channel.send(f"{interaction.user.mention} completed: **{TASK_LABELS[task]}** - Earned £{PRICES[task]:,}")
+    await update_leaderboard(interaction.guild)
 
-    sorted_data = sorted(data.items(), key=lambda x: x[1]['earnings'], reverse=True)
-
-    embed = discord.Embed(title="🏆 Work Leaderboard")
-    total_money = 0
-    for uid, info in sorted_data:
-        status = info.get("status", "🔴")
-        time_worked = str(timedelta(seconds=int(info["time"])))
-        earnings = info["earnings"]
-        total_money += earnings
-        tasks = info["tasks"]
-        embed.add_field(
-            name=f"{status} {info['name']}",
-            value=(
-                f"💰 £{earnings:,}\n"
-                f"⏱️ Time Worked: {time_worked}\n"
-                f"🚗 Car Full Upgrades: {tasks['car']}\n"
-                f"🏍️ Bike Full Upgrades: {tasks['bike']}\n"
-                f"⚙️ Engine Upgrades: {tasks['engine']}\n"
-                f"🛠️ Car Parts: {tasks['car_part']}\n"
-                f"💪 Bike Parts: {tasks['bike_part']}"
-            ),
-            inline=False
-        )
-
-    embed.add_field(name="🏛️ Money in Bank", value=f"£{total_money//2:,}", inline=False)
-
+# ====== LEADERBOARD ======
+async def update_leaderboard(guild):
+    global leaderboard_message
+    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
+    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.green())
+    total_bank = 0
+    for user_id, stats in data.items():
+        name = get_username(guild, user_id)
+        earnings = stats["total"]
+        time_worked = stats["time"]
+        if user_id in clocked_in_users:
+            delta = (datetime.datetime.utcnow() - clocked_in_users[user_id]).total_seconds()
+            time_worked += delta
+        status = "🟢" if user_id in clocked_in_users else "🔴"
+        desc = f"{status} {name}\n💰 £{earnings:,}\n⏱️ Time Worked: {format_timedelta(time_worked)}"
+        for task, label in TASK_LABELS.items():
+            icon = TASK_ICONS[task]
+            desc += f"\n{icon} {label}: {stats.get(task, 0)}"
+        desc += f"\n\n\U0001f3e6 **Money in Bank**\n£{earnings // 2:,}"
+        embed.add_field(name="\u200b", value=desc, inline=False)
+        total_bank += earnings
+    embed.set_footer(text=f"\U0001f3e6 Total Money in Bank: £{total_bank // 2:,}")
     if leaderboard_message:
         await leaderboard_message.edit(embed=embed)
     else:
         leaderboard_message = await channel.send(embed=embed)
 
+# ====== AUTO CLOCK-OUT CHECK ======
+@tasks.loop(minutes=30)
+async def auto_clockout():
+    now = datetime.datetime.utcnow()
+    for user_id, clocked_time in list(clocked_in_users.items()):
+        elapsed = (now - clocked_time).total_seconds()
+        if elapsed > AUTO_CLOCKOUT_MINUTES * 60:
+            member = await bot.fetch_user(user_id)
+            try:
+                await member.send("You have been auto-clocked out due to inactivity.")
+            except:
+                pass
+            data[user_id]["time"] += elapsed
+            del clocked_in_users[user_id]
+            log_channel = bot.get_channel(LOG_CHANNEL_ID)
+            await log_channel.send(f"⚠️ {member.mention} auto-clocked out after {AUTO_CLOCKOUT_MINUTES} minutes.")
 
-async def watch_clock(user_id, user):
-    await asyncio.sleep(7200)  # 2 hours
-    if user_id in clocked_in:
-        try:
-            await user.send("⚠️ You've been clocked in for 2 hours. Please reply or you’ll be auto clocked out in 30 minutes.")
-        except:
-            pass
-        try:
-            def check(m): return m.author.id == user.id
-            await bot.wait_for("message", timeout=1800, check=check)
-        except asyncio.TimeoutError:
-            if user_id in clocked_in:
-                start = clocked_in.pop(user_id)
-                worked = (datetime.utcnow() - start).total_seconds()
-                data[user_id]["time"] += worked
-                data[user_id]["status"] = "🔴"
-                strike_count[user_id] = strike_count.get(user_id, 0) + 1
-                if strike_count[user_id] >= 3:
-                    data.pop(user_id)
-                    strike_count.pop(user_id)
-                admin_role = discord.utils.get(user.guild.roles, id=ADMIN_ROLE_ID)
-                log_channel = bot.get_channel(CHANNEL_ID)
-                if log_channel:
-                    await log_channel.send(f"⚠️ {user.mention} auto clocked out. Strike {strike_count.get(user_id, 0)}. {admin_role.mention}")
+# ====== EVENTS ======
+@bot.event
+async def on_ready():
+    global leaderboard_message
+    print(f"Logged in as {bot.user}")
+    bot.add_view(WorkButtons())
+    panel_channel = bot.get_channel(PANEL_CHANNEL_ID)
+    await panel_channel.purge(limit=5)
+    await panel_channel.send("**Work Tracker Panel**", view=WorkButtons())
+    leaderboard_channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
+    async for msg in leaderboard_channel.history(limit=10):
+        if msg.author == bot.user:
+            leaderboard_message = msg
+            break
+    await update_leaderboard(panel_channel.guild)
+    auto_clockout.start()
 
-bot.add_view(WorkButtons())
-bot.run("YOUR_BOT_TOKEN")
+import os
+bot.run(os.getenv("DISCORD_TOKEN"))
