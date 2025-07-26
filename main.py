@@ -38,15 +38,13 @@ async def log_action(msg):
     if channel:
         await channel.send(msg)
 
-async def update_leaderboard():
-    global leaderboard_msg_id
+async def generate_leaderboard_embed():
+    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.orange())
     channel = bot.get_channel(LEADERBOARD_CHANNEL)
     if not channel:
-        return
+        return None
 
-    embed = discord.Embed(title="🏆 Work Leaderboard", color=discord.Color.orange())
     total_bank = 0
-
     for uid, data in user_data.items():
         member = channel.guild.get_member(uid)
         if not member:
@@ -72,6 +70,16 @@ async def update_leaderboard():
         total_bank += data["money"]
 
     embed.add_field(name="🏛️ Money in Bank", value=f"£{total_bank // 2:,}", inline=False)
+    return embed
+
+async def update_leaderboard():
+    global leaderboard_msg_id
+    channel = bot.get_channel(LEADERBOARD_CHANNEL)
+    if not channel:
+        return
+    embed = await generate_leaderboard_embed()
+    if not embed:
+        return
 
     try:
         if leaderboard_msg_id:
@@ -88,16 +96,19 @@ async def update_leaderboard():
 async def on_ready():
     print(f"Logged in as {bot.user}")
     await bot.get_channel(PANEL_CHANNEL).send("**Work Tracker Panel**", view=WorkPanel())
-    update_leaderboard.start()
+    leaderboard_updater.start()
     auto_clockout.start()
 
 class WorkPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        for key, task in TASKS.items():
-            self.add_item(discord.ui.Button(label=task["label"], emoji=task["emoji"], style=discord.ButtonStyle.primary, custom_id=key))
         self.add_item(discord.ui.Button(label="Clock In", style=discord.ButtonStyle.success, custom_id="clockin"))
         self.add_item(discord.ui.Button(label="Clock Out", style=discord.ButtonStyle.danger, custom_id="clockout"))
+        self.add_item(discord.ui.Button(label="Engine Upgrade", style=discord.ButtonStyle.primary, custom_id="engine"))
+        self.add_item(discord.ui.Button(label="Car Full Upgrade", style=discord.ButtonStyle.primary, custom_id="car"))
+        self.add_item(discord.ui.Button(label="Bike Full Upgrade", style=discord.ButtonStyle.primary, custom_id="bike"))
+        self.add_item(discord.ui.Button(label="Car Part", style=discord.ButtonStyle.secondary, custom_id="carpart"))
+        self.add_item(discord.ui.Button(label="Bike Part", style=discord.ButtonStyle.secondary, custom_id="bikepart"))
         self.add_item(discord.ui.Button(label="Reset Leaderboard", style=discord.ButtonStyle.secondary, custom_id="reset"))
 
 @bot.event
@@ -105,7 +116,6 @@ async def on_interaction(interaction):
     if not interaction.type == discord.InteractionType.component:
         return
     uid = interaction.user.id
-    name = interaction.user.display_name
 
     if uid not in user_data:
         user_data[uid] = {"money": 0, "time": 0, **{k: 0 for k in TASKS}}
@@ -154,12 +164,16 @@ async def on_interaction(interaction):
         await update_leaderboard()
 
 @tasks.loop(seconds=60)
+async def leaderboard_updater():
+    await update_leaderboard()
+
+@tasks.loop(seconds=60)
 async def auto_clockout():
     now = datetime.utcnow()
     for uid, start in list(clocked_in.items()):
         elapsed = (now - start).total_seconds()
         if uid in warning_sent:
-            if elapsed >= 10800:  # 2h + 30min warning
+            if elapsed >= 10800:  # 2h + 30min
                 user = bot.get_user(uid)
                 strikes[uid] = strikes.get(uid, 0) + 1
                 user_data[uid]["time"] = max(0, user_data[uid]["time"] - 0)
@@ -182,10 +196,6 @@ async def auto_clockout():
                 warning_sent[uid] = now
             except:
                 pass
-
-@tasks.loop(seconds=60)
-async def update_leaderboard():
-    await update_leaderboard()
 
 import os
 bot.run(os.getenv("DISCORD_TOKEN"))
