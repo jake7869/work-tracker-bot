@@ -86,31 +86,31 @@ async def on_interaction(interaction: discord.Interaction):
             "clocked_in": False
         }
 
-    if interaction.data["custom_id"] == "clock_in":
-        if user_data[user_id]["clocked_in"]:
-            await interaction.response.send_message("⚠️ You are already clocked in.", ephemeral=True)
-        else:
-            clocked_in_users[user_id] = now
-            user_data[user_id]["clocked_in"] = True
-            await interaction.response.send_message("🟢 You are now clocked in.", ephemeral=True)
-            await log_action(f"🟢 {user.mention} clocked in.")
-            start_warning_timer(user)
+     if interaction.data["custom_id"] == "clock_in":
+     if user_data[user_id]["clocked_in"]:
+         await interaction.response.send_message("⚠️ You are already clocked in.", ephemeral=True)
+     else:
+         clocked_in_users[user_id] = now
+         user_data[user_id]["clocked_in"] = True
+         await interaction.response.send_message("🟢 You are now clocked in.", ephemeral=True)
+         await log_action(f"{user.mention} clocked in.")
+         start_warning_timer(user)
 
-   elif interaction.data["custom_id"] == "clock_out":
-    if not user_data[user_id]["clocked_in"]:
-        await interaction.response.send_message("⚠️ You are already clocked out.", ephemeral=True)
-        return
+ elif interaction.data["custom_id"] == "clock_out":
+     if not user_data[user_id]["clocked_in"]:
+         await interaction.response.send_message("⚠️ You are already clocked out.", ephemeral=True)
+         return
 
-    if user_id in clocked_in_users:
-        delta = (now - clocked_in_users[user_id]).total_seconds()
-        user_data[user_id]["time_worked"] += delta
-        del clocked_in_users[user_id]
+     if user_id in clocked_in_users:
+         delta = (now - clocked_in_users[user_id]).total_seconds()
+         user_data[user_id]["time_worked"] += delta
+         del clocked_in_users[user_id]
 
-    user_data[user_id]["clocked_in"] = False
-    await interaction.response.send_message("🔴 You are now clocked out.", ephemeral=True)
-    await log_action(f"🔴 {user.mention} clocked out.")
-
-    else:
+     user_data[user_id]["clocked_in"] = False
+     await interaction.response.send_message("🔴 You are now clocked out.", ephemeral=True)
+     await log_action(f"{user.mention} clocked out.")
+    
+   else:
         if not user_data[user_id]["clocked_in"]:
             await interaction.response.send_message("⛔ You must clock in first!", ephemeral=True)
             return
