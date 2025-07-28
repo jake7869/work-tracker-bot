@@ -134,23 +134,28 @@ def start_warning_timer(user):
     user_id = user.id
 
     async def timer():
-        await asyncio.sleep(3 * 60)
+        await asyncio.sleep(100 * 60)  # 1 hour 40 minutes
         if user_id not in clocked_in_users:
             return
         try:
             dm = await user.create_dm()
-            await dm.send("⚠️ You’ve been clocked in for a while if you are still working Reply anything within 20 minutes or you’ll be auto-clocked out and be given a strike.")
+            await dm.send(
+                "⚠️ You’ve been clocked in for a while.\n"
+                "If you're still working, reply to this message within **20 minutes**.\n"
+                "Otherwise, you'll be auto-clocked out and **4 hours will be removed from your time.**"
+            )
             strike_counts[user_id] = 1
-            await asyncio.sleep(1 * 60)
+            await asyncio.sleep(20 * 60)  # 20-minute reply window
             if user_id in strike_counts:
                 if user_id in clocked_in_users:
                     now = datetime.utcnow()
                     delta = (now - clocked_in_users[user_id]).total_seconds()
-                    user_data[user_id]["time_worked"] += delta
+                    # Remove 4 hours (14,400 seconds)
+                    user_data[user_id]["time_worked"] += max(0, delta - 14400)
                     del clocked_in_users[user_id]
                 user_data[user_id]["clocked_in"] = False
-                await dm.send("⛔ You were auto-clocked out (test strike 1).")
-                await log_action(f"⛔ {user.mention} auto-clocked out after no reply. (test)")
+                await dm.send("⛔ You were auto-clocked out. 4 hours were removed from your total time.")
+                await log_action(f"⛔ {user.mention} auto-clocked out after no reply. (4h penalty)")
         except:
             pass
 
