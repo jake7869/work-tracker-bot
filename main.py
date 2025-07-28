@@ -57,21 +57,20 @@ async def on_message(message):
         return
     user_id = message.author.id
     if user_id in strike_counts:
-        # Add the time before warning
         if user_id in clocked_in_users:
             now = datetime.utcnow()
             delta = (now - clocked_in_users[user_id]).total_seconds()
             user_data[user_id]["time_worked"] += delta
             clocked_in_users[user_id] = now
-
         strike_counts.pop(user_id)
         await message.channel.send("✅ Got your response. You’ll stay clocked in.")
+        start_warning_timer(message.author)
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
     user_id = user.id
-    if interaction.data["component_type"] != 2:  # Not a button
+    if interaction.data["component_type"] != 2:
         return
 
     now = datetime.utcnow()
@@ -130,19 +129,23 @@ def start_warning_timer(user):
     user_id = user.id
 
     async def timer():
-        await asyncio.sleep(2 * 3600)  # 2 hours
+        await asyncio.sleep(15 * 60)  # 15 minutes
         if user_id not in clocked_in_users:
             return
         try:
             dm = await user.create_dm()
-            await dm.send("⚠️ You’ve been clocked in for 2 hours. Reply to stay clocked in or you’ll be removed in 30 minutes.")
+            await dm.send("⚠️ You’ve been clocked in for 15 minutes (test). Reply within 5 minutes or you’ll be auto-clocked out.")
             strike_counts[user_id] = 1
-            await asyncio.sleep(1800)
+            await asyncio.sleep(5 * 60)  # 5 minutes
             if user_id in strike_counts:
-                del clocked_in_users[user_id]
+                if user_id in clocked_in_users:
+                    now = datetime.utcnow()
+                    delta = (now - clocked_in_users[user_id]).total_seconds()
+                    user_data[user_id]["time_worked"] += delta
+                    del clocked_in_users[user_id]
                 user_data[user_id]["clocked_in"] = False
-                await dm.send("⛔ You were auto-clocked out and received Strike 1.")
-                await log_action(f"⛔ {user.mention} was auto-clocked out and received a strike.")
+                await dm.send("⛔ You were auto-clocked out (test strike 1).")
+                await log_action(f"⛔ {user.mention} auto-clocked out after no reply. (test)")
         except:
             pass
 
