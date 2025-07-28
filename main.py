@@ -129,14 +129,14 @@ def start_warning_timer(user):
     user_id = user.id
 
     async def timer():
-        await asyncio.sleep(15 * 60)  # 15 minutes
+        await asyncio.sleep(5 * 60)  # 5 minutes
         if user_id not in clocked_in_users:
             return
         try:
             dm = await user.create_dm()
             await dm.send("⚠️ You’ve been clocked in for 15 minutes (test). Reply within 5 minutes or you’ll be auto-clocked out.")
             strike_counts[user_id] = 1
-            await asyncio.sleep(5 * 60)  # 5 minutes
+            await asyncio.sleep(1 * 60)  # 5 minutes
             if user_id in strike_counts:
                 if user_id in clocked_in_users:
                     now = datetime.utcnow()
