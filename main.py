@@ -134,7 +134,7 @@ def start_warning_timer(user):
     user_id = user.id
 
     async def timer():
-        await asyncio.sleep(5 * 60)  # 5 minutes
+        await asyncio.sleep(3 * 60)  # 5 minutes
         if user_id not in clocked_in_users:
             return
         try:
