@@ -146,13 +146,11 @@ def start_warning_timer(user):
             )
             strike_counts[user_id] = 1
             await asyncio.sleep(20 * 60)  # 20-minute reply window
-            if user_id in strike_counts:
-                if user_id in clocked_in_users:
-                    now = datetime.utcnow()
-                    delta = (now - clocked_in_users[user_id]).total_seconds()
-                    # Remove 4 hours (14,400 seconds)
-                    user_data[user_id]["time_worked"] += max(0, delta - 14400)
-                    del clocked_in_users[user_id]
+            if user_id in strike_counts and user_id in clocked_in_users:
+                now = datetime.utcnow()
+                delta = (now - clocked_in_users[user_id]).total_seconds()
+                user_data[user_id]["time_worked"] += max(0, delta - 14400)
+                del clocked_in_users[user_id]
                 user_data[user_id]["clocked_in"] = False
                 await dm.send("⛔ You were auto-clocked out. 4 hours were removed from your total time.")
                 await log_action(f"⛔ {user.mention} auto-clocked out after no reply. (4h penalty)")
